@@ -17,13 +17,13 @@ const Footer = () => {
 
   const quickLinks = [
     { href: "/", label: "Home" },
-    { href: "#about", label: "About Us" },
+    { href: "#principal-message", label: "About Us" },
     { href: "#academics", label: "Academics" },
+    { href: "#faculty", label: "Faculty" },
     { href: "#admission", label: "Admission" },
     { href: "#contact", label: "Contact Us" },
     { href: "/auth/signin", label: "Student Portal" },
     { href: "/careers", label: "Careers" },
-    { href: "/news", label: "News & Events" },
   ];
 
   const socialLinks = [

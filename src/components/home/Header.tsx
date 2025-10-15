@@ -12,8 +12,9 @@ const Header = () => {
 
   const navLinks = [
     { href: "/", label: "Home" },
-    { href: "#about", label: "About" },
+    { href: "#principal-message", label: "About" },
     { href: "#academics", label: "Academics" },
+    { href: "#faculty", label: "Faculty" },
     { href: "#admission", label: "Admission" },
     { href: "#contact", label: "Contact" },
   ];
