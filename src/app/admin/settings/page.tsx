@@ -130,7 +130,7 @@ export default function AdminSettings() {
     timezone: "Asia/Kolkata",
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24",
-    currency: "INR",
+    currency: "BDT",
     language: "English",
     theme: "light",
     enableMaintenance: false,
@@ -1109,10 +1109,13 @@ export default function AdminSettings() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="INR">Indian Rupee (₹)</SelectItem>
+                        <SelectItem value="BDT">
+                          Bangladeshi Taka (৳)
+                        </SelectItem>
                         <SelectItem value="USD">US Dollar ($)</SelectItem>
                         <SelectItem value="EUR">Euro (€)</SelectItem>
                         <SelectItem value="GBP">British Pound (£)</SelectItem>
+                        <SelectItem value="INR">Indian Rupee (₹)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

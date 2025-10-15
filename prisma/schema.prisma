@@ -63,8 +63,12 @@ model StudentProfile {
   // Student activities
   attendances   Attendance[]
   grades        Grade[]
-  feeRecords    FeeRecord[]
   assignments   AssignmentSubmission[]
+  
+  // Fee management
+  studentFees   StudentFee[]
+  payments      Payment[]
+  monthlyDues   MonthlyDue[]
 
   @@map("student_profiles")
 }
@@ -126,11 +130,12 @@ model Class {
   teacher     TeacherProfile? @relation(fields: [teacherId], references: [id])
   
   // Class relationships
-  students    StudentProfile[]
-  subjects    Subject[]
-  attendances Attendance[]
-  assignments Assignment[]
-  timetables  Timetable[]
+  students      StudentProfile[]
+  subjects      Subject[]
+  attendances   Attendance[]
+  assignments   Assignment[]
+  timetables    Timetable[]
+  feeStructures FeeStructure[]
 
   @@unique([name, section, academicYear])
   @@map("classes")
@@ -251,30 +256,157 @@ model Grade {
   @@map("grades")
 }
 
-// Fee Record model
-model FeeRecord {
-  id          String @id @default(cuid())
-  studentId   String
-  feeType     String // "Tuition", "Library", "Lab", etc.
-  amount      Decimal
-  dueDate     DateTime
-  paidDate    DateTime?
-  status      FeeStatus @default(PENDING)
-  paymentMethod String?
-  transactionId String?
-  remarks     String?
-  createdAt   DateTime @default(now())
+// Fee Structure - Define fees for each class
+model FeeStructure {
+  id            String @id @default(cuid())
+  classId       String
+  feeTypeId     String
+  amount        Decimal
+  frequency     FeeFrequency // MONTHLY, QUARTERLY, YEARLY, ONE_TIME
+  academicYear  String
+  isActive      Boolean @default(true)
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  student     StudentProfile @relation(fields: [studentId], references: [id])
+  class         Class @relation(fields: [classId], references: [id])
+  feeType       FeeType @relation(fields: [feeTypeId], references: [id])
+  studentFees   StudentFee[]
 
-  @@map("fee_records")
+  @@unique([classId, feeTypeId, academicYear])
+  @@map("fee_structures")
+}
+
+// Fee Type - Types of fees (Tuition, Admission, Exam, etc.)
+model FeeType {
+  id            String @id @default(cuid())
+  name          String @unique // "Tuition Fee", "Admission Fee", "Exam Fee"
+  code          String @unique // "TUITION", "ADMISSION", "EXAM"
+  category      FeeCategory
+  isRecurring   Boolean @default(false) // For monthly/quarterly fees
+  isActive      Boolean @default(true)
+  description   String?
+  createdAt     DateTime @default(now())
+
+  feeStructures FeeStructure[]
+  studentFees   StudentFee[]
+
+  @@map("fee_types")
+}
+
+enum FeeCategory {
+  ACADEMIC      // Tuition, Exam fees
+  FACILITY      // Library, Lab, Sports
+  TRANSPORT     // Bus fees
+  HOSTEL        // Accommodation
+  OTHER         // Miscellaneous
+}
+
+enum FeeFrequency {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+  ONE_TIME
+}
+
+// Student Fee Assignment - Links students to their applicable fees
+model StudentFee {
+  id              String @id @default(cuid())
+  studentId       String
+  feeStructureId  String
+  feeTypeId       String
+  academicYear    String
+  totalAmount     Decimal
+  paidAmount      Decimal @default(0)
+  discountAmount  Decimal @default(0)
+  dueAmount       Decimal // Calculated: totalAmount - paidAmount - discountAmount
+  status          FeeStatus @default(PENDING)
+  dueDate         DateTime?
+  lastPaymentDate DateTime?
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+  feeStructure    FeeStructure @relation(fields: [feeStructureId], references: [id])
+  feeType         FeeType @relation(fields: [feeTypeId], references: [id])
+  
+  payments        Payment[]
+  monthlyDues     MonthlyDue[]
+
+  @@map("student_fees")
+}
+
+// Payment Collection - Records each payment transaction
+model Payment {
+  id              String @id @default(cuid())
+  studentFeeId    String
+  studentId       String
+  amount          Decimal
+  discountAmount  Decimal @default(0)
+  discountReason  String?
+  paymentMethod   PaymentMethod
+  paymentDate     DateTime @default(now())
+  receiptNumber   String @unique
+  transactionId   String?
+  collectedBy     String // User ID of staff/admin who collected
+  remarks         String?
+  status          PaymentStatus @default(COMPLETED)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  studentFee      StudentFee @relation(fields: [studentFeeId], references: [id])
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
 }
 
 enum FeeStatus {
   PENDING
+  PARTIAL
   PAID
   OVERDUE
-  PARTIAL
+  WAIVED
+}
+
+// Monthly Due Tracking - For recurring fees like tuition (month-wise tracking)
+model MonthlyDue {
+  id            String @id @default(cuid())
+  studentFeeId  String
+  studentId     String
+  month         Int // 1-12
+  year          Int
+  amount        Decimal
+  paidAmount    Decimal @default(0)
+  status        FeeStatus @default(PENDING)
+  dueDate       DateTime
+  paidDate      DateTime?
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  studentFee    StudentFee @relation(fields: [studentFeeId], references: [id])
+  student       StudentProfile @relation(fields: [studentId], references: [id])
+
+  @@unique([studentFeeId, month, year])
+  @@map("monthly_dues")
 }
 
 // Timetable model

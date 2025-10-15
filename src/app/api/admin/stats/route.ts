@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import { db as prisma } from "@/lib/db";
 
-const prisma = new PrismaClient();
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -64,10 +64,12 @@ export async function GET() {
         },
       }),
 
-      // Fee statistics
-      prisma.feeRecord.findMany({
+      // Fee statistics - using new StudentFee model
+      prisma.studentFee.findMany({
         select: {
-          amount: true,
+          totalAmount: true,
+          paidAmount: true,
+          dueAmount: true,
           status: true,
         },
       }),
@@ -81,22 +83,29 @@ export async function GET() {
       (record: { status: string }) => record.status === "ABSENT"
     ).length;
 
-    // Calculate fee statistics
-    const paidFees = feeStats
-      .filter((fee: { status: string; amount: any }) => fee.status === "PAID")
-      .reduce(
-        (sum: number, fee: { amount: any }) => sum + Number(fee.amount),
-        0
-      );
+    // Calculate fee statistics using new StudentFee model
+    const totalFeesAmount = feeStats.reduce(
+      (sum: number, fee: any) => sum + Number(fee.totalAmount),
+      0
+    );
 
-    const pendingFees = feeStats
-      .filter(
-        (fee: { status: string; amount: any }) => fee.status === "PENDING"
-      )
-      .reduce(
-        (sum: number, fee: { amount: any }) => sum + Number(fee.amount),
-        0
-      );
+    const paidFees = feeStats.reduce(
+      (sum: number, fee: any) => sum + Number(fee.paidAmount),
+      0
+    );
+
+    const pendingFees = feeStats.reduce(
+      (sum: number, fee: any) => sum + Number(fee.dueAmount),
+      0
+    );
+
+    // Count fee statuses
+    const paidFeesCount = feeStats.filter(
+      (fee: any) => fee.status === "PAID"
+    ).length;
+    const pendingFeesCount = feeStats.filter(
+      (fee: any) => fee.status === "PENDING" || fee.status === "PARTIAL"
+    ).length;
 
     const stats = {
       totalStudents,
@@ -105,8 +114,11 @@ export async function GET() {
       totalSubjects,
       presentToday,
       absentToday,
+      totalFeesAmount,
       paidFees,
       pendingFees,
+      paidFeesCount,
+      pendingFeesCount,
     };
 
     return NextResponse.json(stats);

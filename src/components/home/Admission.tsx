@@ -205,17 +205,17 @@ const Admission = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white rounded-lg p-6 text-center shadow-md">
                   <p className="text-gray-600 mb-2">Primary (Grades 1-5)</p>
-                  <p className="text-3xl font-bold text-blue-600">₹50,000</p>
+                  <p className="text-3xl font-bold text-blue-600">৳50,000</p>
                   <p className="text-sm text-gray-500 mt-1">per annum</p>
                 </div>
                 <div className="bg-white rounded-lg p-6 text-center shadow-md">
                   <p className="text-gray-600 mb-2">Middle (Grades 6-8)</p>
-                  <p className="text-3xl font-bold text-blue-600">₹60,000</p>
+                  <p className="text-3xl font-bold text-blue-600">৳60,000</p>
                   <p className="text-sm text-gray-500 mt-1">per annum</p>
                 </div>
                 <div className="bg-white rounded-lg p-6 text-center shadow-md">
                   <p className="text-gray-600 mb-2">High (Grades 9-12)</p>
-                  <p className="text-3xl font-bold text-blue-600">₹75,000</p>
+                  <p className="text-3xl font-bold text-blue-600">৳75,000</p>
                   <p className="text-sm text-gray-500 mt-1">per annum</p>
                 </div>
               </div>
