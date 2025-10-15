@@ -18,12 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
 import {
   Dialog,
   DialogContent,
@@ -33,8 +28,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -43,17 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Search,
-  Calendar as CalendarIcon,
-  UserCheck,
-  UserX,
-  Clock,
-  Plus,
-  Save,
-} from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { Search, UserCheck, UserX, Clock, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 
 interface Student {
@@ -142,6 +125,7 @@ export default function TeacherAttendancePage() {
   const [loading, setLoading] = useState(false);
 
   const [showMarkAttendance, setShowMarkAttendance] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [bulkAttendanceClass, setBulkAttendanceClass] = useState<string>("");
   const [bulkAttendanceDate, setBulkAttendanceDate] = useState<Date>(
     new Date()
@@ -218,7 +202,7 @@ export default function TeacherAttendancePage() {
   };
 
   // Fetch students for bulk attendance
-  const fetchStudentsForClass = async (classId: string) => {
+  const fetchStudentsForClass = async (classId: string, date: Date) => {
     try {
       const response = await fetch(
         `/api/teacher/students?classId=${classId}&limit=100`
@@ -227,11 +211,54 @@ export default function TeacherAttendancePage() {
         const data = await response.json();
         setStudents(data.students || []);
 
-        // Initialize bulk attendance
+        // Fetch existing attendance for this class and date
+        const attendanceResponse = await fetch(
+          `/api/teacher/attendance?classId=${classId}&date=${
+            date.toISOString().split("T")[0]
+          }&limit=100`
+        );
+
         const initialBulkAttendance: BulkAttendance = {};
-        data.students?.forEach((student: Student) => {
-          initialBulkAttendance[student.id] = { status: "PRESENT" };
-        });
+
+        if (attendanceResponse.ok) {
+          const attendanceData = await attendanceResponse.json();
+          const existingAttendance = attendanceData.attendance || [];
+
+          // Create a map of existing attendance by studentId
+          const attendanceMap = new Map();
+          existingAttendance.forEach((record: AttendanceRecord) => {
+            attendanceMap.set(record.student.id, {
+              status: record.status,
+              remarks: record.remarks || "",
+            });
+          });
+
+          // Initialize bulk attendance with existing data or default to PRESENT
+          data.students?.forEach((student: Student) => {
+            if (attendanceMap.has(student.id)) {
+              initialBulkAttendance[student.id] = attendanceMap.get(student.id);
+            } else {
+              initialBulkAttendance[student.id] = { status: "PRESENT" };
+            }
+          });
+
+          // Set edit mode if attendance exists
+          if (existingAttendance.length > 0) {
+            setIsEditMode(true);
+            toast.info(
+              `Loading existing attendance for ${date.toLocaleDateString()}`
+            );
+          } else {
+            setIsEditMode(false);
+          }
+        } else {
+          // No existing attendance, initialize with PRESENT
+          data.students?.forEach((student: Student) => {
+            initialBulkAttendance[student.id] = { status: "PRESENT" };
+          });
+          setIsEditMode(false);
+        }
+
         setBulkAttendance(initialBulkAttendance);
       }
     } catch (error) {
@@ -274,19 +301,44 @@ export default function TeacherAttendancePage() {
         body: JSON.stringify(requestData),
       });
 
-      const responseData = await response.json();
-      console.log("Attendance API response:", responseData);
-
       if (response.ok) {
-        toast.success("Attendance marked successfully");
+        const responseData = await response.json();
+        console.log("Attendance API response:", responseData);
+        toast.success(
+          isEditMode
+            ? "Attendance updated successfully"
+            : "Attendance marked successfully"
+        );
         setShowMarkAttendance(false);
+        setIsEditMode(false);
         fetchAttendance();
       } else {
-        console.error("Attendance API error:", responseData);
-        toast.error(responseData.error || "Failed to mark attendance");
-        if (responseData.details) {
-          console.error("Validation details:", responseData.details);
+        let errorMessage = "Failed to mark attendance";
+        try {
+          const responseData = await response.json();
+          console.error("Attendance API error:", responseData);
+
+          if (responseData.error) {
+            errorMessage = responseData.error;
+          }
+
+          if (responseData.details) {
+            console.error("Validation details:", responseData.details);
+            errorMessage += ": " + JSON.stringify(responseData.details);
+          }
+
+          if (responseData.teacherClasses) {
+            console.log(
+              "Teacher's available classes:",
+              responseData.teacherClasses
+            );
+          }
+        } catch (parseError) {
+          console.error("Failed to parse error response:", parseError);
+          errorMessage = `Server error (Status: ${response.status})`;
         }
+
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error("Error marking attendance:", error);
@@ -315,6 +367,13 @@ export default function TeacherAttendancePage() {
       updatedAttendance[studentId] = { status };
     });
     setBulkAttendance(updatedAttendance);
+  };
+
+  // Open edit dialog for a specific date
+  const openEditAttendance = (classId: string, date: Date) => {
+    setBulkAttendanceClass(classId);
+    setBulkAttendanceDate(date);
+    setShowMarkAttendance(true);
   };
 
   // Get status badge
@@ -351,10 +410,10 @@ export default function TeacherAttendancePage() {
   }, [currentPage, searchTerm, selectedClass, selectedDate, statusFilter]);
 
   useEffect(() => {
-    if (bulkAttendanceClass) {
-      fetchStudentsForClass(bulkAttendanceClass);
+    if (bulkAttendanceClass && bulkAttendanceDate) {
+      fetchStudentsForClass(bulkAttendanceClass, bulkAttendanceDate);
     }
-  }, [bulkAttendanceClass]);
+  }, [bulkAttendanceClass, bulkAttendanceDate]);
 
   return (
     <div className="p-6 space-y-6">
@@ -374,9 +433,13 @@ export default function TeacherAttendancePage() {
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Mark Class Attendance</DialogTitle>
+              <DialogTitle>
+                {isEditMode ? "Edit Class Attendance" : "Mark Class Attendance"}
+              </DialogTitle>
               <DialogDescription>
-                Mark attendance for all students in a class for a specific date.
+                {isEditMode
+                  ? "Update existing attendance records for the selected class and date."
+                  : "Mark attendance for all students in a class for a specific date."}
               </DialogDescription>
             </DialogHeader>
 
@@ -507,13 +570,20 @@ export default function TeacherAttendancePage() {
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setShowMarkAttendance(false)}
+                      onClick={() => {
+                        setShowMarkAttendance(false);
+                        setIsEditMode(false);
+                      }}
                     >
                       Cancel
                     </Button>
                     <Button onClick={markBulkAttendance} disabled={loading}>
                       <Save className="h-4 w-4 mr-2" />
-                      {loading ? "Saving..." : "Save Attendance"}
+                      {loading
+                        ? "Saving..."
+                        : isEditMode
+                        ? "Update Attendance"
+                        : "Save Attendance"}
                     </Button>
                   </div>
                 </>
@@ -632,6 +702,15 @@ export default function TeacherAttendancePage() {
                 <SelectItem value="LATE">Late</SelectItem>
               </SelectContent>
             </Select>
+
+            {selectedClass && selectedClass !== "all" && (
+              <Button
+                variant="default"
+                onClick={() => openEditAttendance(selectedClass, selectedDate)}
+              >
+                Edit Attendance
+              </Button>
+            )}
 
             {(searchTerm ||
               (selectedClass && selectedClass !== "all") ||
