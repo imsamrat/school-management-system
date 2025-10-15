@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 
+// Force dynamic rendering - no caching
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const gradeSchema = z.object({
   studentId: z.string().min(1, "Student is required"),
   subjectId: z.string().min(1, "Subject is required"),
@@ -89,14 +93,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (published && published !== "all") {
-      const publishedBool = published === "true";
-      if (publishedBool) {
-        where.remarks = {
-          contains: "[PUBLISHED]",
-        };
-      } else {
-        where.OR = [{ remarks: { contains: "[DRAFT]" } }, { remarks: null }];
-      }
+      where.published = published === "true";
     }
 
     const [gradesFromDB, total] = await Promise.all([
@@ -150,25 +147,31 @@ export async function GET(request: NextRequest) {
       db.grade.count({ where }),
     ]);
 
-    // Add published status based on remarks field (temporary solution)
+    // Return grades with actual published field from database
     const grades = gradesFromDB.map((grade) => ({
       ...grade,
-      published: grade.remarks?.includes("[PUBLISHED]")
-        ? true
-        : grade.remarks?.includes("[DRAFT]")
-        ? false
-        : true, // Default to published for existing records
+      published: grade.published, // Use actual database value
     }));
 
-    return NextResponse.json({
-      grades,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
+    return NextResponse.json(
+      {
+        grades,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching grades:", error);
     return NextResponse.json(

@@ -58,6 +58,10 @@ import {
   BookOpen,
   Eye,
   EyeOff,
+  Download,
+  CheckSquare,
+  XSquare,
+  FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -184,6 +188,11 @@ export default function AdminGrades() {
   const [selectedClassStudents, setSelectedClassStudents] = useState<Student[]>(
     []
   );
+  const [showBulkPublishDialog, setShowBulkPublishDialog] = useState(false);
+  const [bulkPublishAction, setBulkPublishAction] = useState<
+    "publish" | "unpublish"
+  >("publish");
+  const [isExporting, setIsExporting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -269,6 +278,7 @@ export default function AdminGrades() {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: "10",
+        _t: Date.now().toString(), // Cache-busting parameter
         ...(searchTerm && { search: searchTerm }),
         ...(selectedClass &&
           selectedClass !== "all" && { classId: selectedClass }),
@@ -282,7 +292,13 @@ export default function AdminGrades() {
           }),
       });
 
-      const response = await fetch(`/api/grades?${params}`);
+      const response = await fetch(`/api/grades?${params}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      });
       const data = await response.json();
 
       if (response.ok) {
@@ -378,12 +394,16 @@ export default function AdminGrades() {
   };
 
   const handlePublishToggle = async (grade: Grade) => {
-    const action = grade.published !== false ? "unpublish" : "publish";
+    // Determine current and new published status
+    // If grade.published is undefined or null, treat it as true (published)
+    const currentlyPublished = grade.published ?? true;
+    const newPublishedStatus = !currentlyPublished;
+    const action = currentlyPublished ? "unpublish" : "publish";
 
     if (
       !confirm(
         `Are you sure you want to ${action} this grade? ${
-          grade.published !== false
+          currentlyPublished
             ? "Students will no longer be able to see it."
             : "Students will be able to see it."
         }`
@@ -393,22 +413,134 @@ export default function AdminGrades() {
     }
 
     try {
+      console.log(
+        `Toggling grade ${grade.id} from ${currentlyPublished} to ${newPublishedStatus}`
+      );
+
       const response = await fetch(`/api/grades/${grade.id}/publish`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ published: grade.published === false }),
+        body: JSON.stringify({ published: newPublishedStatus }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log(`Successfully ${action}ed grade ${grade.id}`);
+        toast.success(data.message);
+        // Refetch with a small delay to ensure database is updated
+        setTimeout(() => fetchGrades(), 100);
+      } else {
+        console.error(`Failed to ${action} grade:`, data);
+        toast.error(data.error || `Failed to ${action} grade`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing grade:`, error);
+      toast.error(`Failed to ${action} grade`);
+    }
+  };
+
+  const handleBulkPublish = async () => {
+    const action = bulkPublishAction;
+
+    // Build filters based on current selections
+    const filters: any = {};
+
+    if (selectedClass && selectedClass !== "all") {
+      filters.classId = selectedClass;
+    }
+
+    if (selectedSubject && selectedSubject !== "all") {
+      filters.subjectId = selectedSubject;
+    }
+
+    if (selectedExamType && selectedExamType !== "all") {
+      filters.examType = selectedExamType;
+    }
+
+    // If no filters are applied, confirm with user
+    if (Object.keys(filters).length === 0) {
+      const confirmAll = confirm(
+        `⚠️ No filters applied. This will ${action} ALL grades in the system. Are you sure?`
+      );
+      if (!confirmAll) return;
+    }
+
+    try {
+      const response = await fetch("/api/grades/bulk-publish", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, filters }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         toast.success(data.message);
-        fetchGrades();
+        setShowBulkPublishDialog(false);
+        setTimeout(() => fetchGrades(), 100);
       } else {
-        toast.error(data.error || `Failed to ${action} grade`);
+        toast.error(data.error || `Failed to bulk ${action}`);
       }
     } catch (error) {
-      toast.error(`Failed to ${action} grade`);
+      toast.error(`Failed to bulk ${action} grades`);
+    }
+  };
+
+  const handleExportToExcel = async () => {
+    setIsExporting(true);
+
+    try {
+      // Build query params based on current filters
+      const params = new URLSearchParams();
+
+      if (selectedClass && selectedClass !== "all") {
+        params.append("classId", selectedClass);
+      }
+
+      if (selectedSubject && selectedSubject !== "all") {
+        params.append("subjectId", selectedSubject);
+      }
+
+      if (selectedExamType && selectedExamType !== "all") {
+        params.append("examType", selectedExamType);
+      }
+
+      // Only export published grades by default
+      if (selectedPublishedStatus === "true" || !selectedPublishedStatus) {
+        params.append("publishedOnly", "true");
+      }
+
+      const response = await fetch(`/api/grades/export?${params}`);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get("Content-Disposition");
+        const filename = contentDisposition
+          ? contentDisposition.split("filename=")[1].replace(/"/g, "")
+          : `grades_${new Date().toISOString().split("T")[0]}.xlsx`;
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        toast.success("Grades exported successfully!");
+      } else {
+        const data = await response.json();
+        toast.error(data.error || "Failed to export grades");
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export grades");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -639,12 +771,60 @@ export default function AdminGrades() {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              onClick={handleExportToExcel}
+              disabled={isExporting || grades.length === 0}
+              className="flex items-center gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export Excel
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setShowBulkEntry(true)}
               className="flex items-center gap-2"
             >
               <BookOpen className="h-4 w-4" />
               Bulk Entry
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4" />
+                  Bulk Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setBulkPublishAction("publish");
+                    setShowBulkPublishDialog(true);
+                  }}
+                  className="text-green-600"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Bulk Publish
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setBulkPublishAction("unpublish");
+                    setShowBulkPublishDialog(true);
+                  }}
+                  className="text-orange-600"
+                >
+                  <EyeOff className="h-4 w-4 mr-2" />
+                  Bulk Unpublish
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button onClick={() => setIsDialogOpen(true)}>
@@ -1182,6 +1362,146 @@ export default function AdminGrades() {
           </div>
         )}
 
+        {/* Bulk Publish/Unpublish Dialog */}
+        {showBulkPublishDialog && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  {bulkPublishAction === "publish" ? (
+                    <>
+                      <Eye className="h-5 w-5 text-green-600" />
+                      Bulk Publish Grades
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="h-5 w-5 text-orange-600" />
+                      Bulk Unpublish Grades
+                    </>
+                  )}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowBulkPublishDialog(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-900 font-medium mb-2">
+                    Current Filters Applied:
+                  </p>
+                  <div className="space-y-1 text-sm text-blue-800">
+                    {selectedClass && selectedClass !== "all" ? (
+                      <div>
+                        • Class:{" "}
+                        {classes.find((c) => c.id === selectedClass)?.name ||
+                          "Selected"}{" "}
+                        -{" "}
+                        {classes.find((c) => c.id === selectedClass)?.section ||
+                          ""}
+                      </div>
+                    ) : (
+                      <div>• Class: All Classes</div>
+                    )}
+
+                    {selectedSubject && selectedSubject !== "all" ? (
+                      <div>
+                        • Subject:{" "}
+                        {subjects.find((s) => s.id === selectedSubject)?.name ||
+                          "Selected"}
+                      </div>
+                    ) : (
+                      <div>• Subject: All Subjects</div>
+                    )}
+
+                    {selectedExamType && selectedExamType !== "all" ? (
+                      <div>• Exam Type: {selectedExamType}</div>
+                    ) : (
+                      <div>• Exam Type: All Types</div>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={`${
+                    bulkPublishAction === "publish"
+                      ? "bg-green-50 border-green-200"
+                      : "bg-orange-50 border-orange-200"
+                  } border rounded-lg p-4`}
+                >
+                  <p className="text-sm font-medium mb-2">
+                    {bulkPublishAction === "publish"
+                      ? "📢 Publishing grades will:"
+                      : "🔒 Unpublishing grades will:"}
+                  </p>
+                  <ul className="text-sm space-y-1 ml-4 list-disc">
+                    {bulkPublishAction === "publish" ? (
+                      <>
+                        <li>Make grades visible to students</li>
+                        <li>Allow students to view their results</li>
+                        <li>Enable grade downloads for students</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Hide grades from students</li>
+                        <li>Prevent students from viewing results</li>
+                        <li>Keep grades in draft status</li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+
+                {(!selectedClass || selectedClass === "all") &&
+                  (!selectedSubject || selectedSubject === "all") &&
+                  (!selectedExamType || selectedExamType === "all") && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-yellow-900 font-medium">
+                        ⚠️ Warning: No filters applied!
+                      </p>
+                      <p className="text-xs text-yellow-800 mt-1">
+                        This will {bulkPublishAction} ALL grades in the entire
+                        system. Consider applying filters first.
+                      </p>
+                    </div>
+                  )}
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBulkPublishDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleBulkPublish}
+                    className={
+                      bulkPublishAction === "publish"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-orange-600 hover:bg-orange-700"
+                    }
+                  >
+                    {bulkPublishAction === "publish" ? (
+                      <>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Publish Grades
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="h-4 w-4 mr-2" />
+                        Unpublish Grades
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card>
@@ -1230,12 +1550,52 @@ export default function AdminGrades() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {grades.filter((g) => g.published !== false).length}
+                {grades.filter((g) => g.published ?? true).length}
               </div>
               <p className="text-xs text-gray-500">Visible to students</p>
             </CardContent>
           </Card>
         </div>
+
+        {/* Info Banner */}
+        {grades.length > 0 && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <CheckSquare className="h-4 w-4 text-blue-600" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                  💡 Pro Tip: Use Filters for Bulk Operations
+                </h3>
+                <p className="text-xs text-gray-600 mb-2">
+                  Apply filters (Class, Subject, Exam Type) below, then use{" "}
+                  <strong>Bulk Actions</strong> to publish/unpublish multiple
+                  grades at once. Use <strong>Export Excel</strong> to download
+                  filtered results for notice boards.
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="bg-white px-2 py-1 rounded border border-blue-200 text-blue-700">
+                    {grades.length} grades loaded
+                  </span>
+                  {(selectedClass && selectedClass !== "all") ||
+                  (selectedSubject && selectedSubject !== "all") ||
+                  (selectedExamType && selectedExamType !== "all") ? (
+                    <span className="bg-green-100 px-2 py-1 rounded border border-green-300 text-green-700">
+                      ✓ Filters active
+                    </span>
+                  ) : (
+                    <span className="bg-yellow-100 px-2 py-1 rounded border border-yellow-300 text-yellow-700">
+                      ⚠️ No filters - showing all grades
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <Card>
@@ -1418,7 +1778,7 @@ export default function AdminGrades() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {grade.published !== false ? (
+                            {grade.published ?? true ? (
                               <Badge className="bg-green-100 text-green-800">
                                 <Eye className="h-3 w-3 mr-1" />
                                 Published
@@ -1458,12 +1818,12 @@ export default function AdminGrades() {
                               <DropdownMenuItem
                                 onClick={() => handlePublishToggle(grade)}
                                 className={
-                                  grade.published !== false
+                                  grade.published ?? true
                                     ? "text-orange-600"
                                     : "text-green-600"
                                 }
                               >
-                                {grade.published !== false ? (
+                                {grade.published ?? true ? (
                                   <>
                                     <EyeOff className="h-4 w-4 mr-2" />
                                     Unpublish

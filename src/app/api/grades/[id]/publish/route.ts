@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+// Force dynamic rendering - no caching
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -21,7 +25,13 @@ export async function PATCH(
 
     const { published } = await request.json();
 
+    console.log(`[PUBLISH API] Received request to update grade ${params.id}`);
+    console.log(`[PUBLISH API] New published value: ${published}`);
+
     if (typeof published !== "boolean") {
+      console.error(
+        `[PUBLISH API] Invalid published value type: ${typeof published}`
+      );
       return NextResponse.json(
         { error: "Published status must be a boolean" },
         { status: 400 }
@@ -43,8 +53,14 @@ export async function PATCH(
     });
 
     if (!existingGrade) {
+      console.error(`[PUBLISH API] Grade not found: ${params.id}`);
       return NextResponse.json({ error: "Grade not found" }, { status: 404 });
     }
+
+    console.log(
+      `[PUBLISH API] Current published status: ${existingGrade.published}`
+    );
+    console.log(`[PUBLISH API] Updating to: ${published}`);
 
     // If teacher, verify they own this grade
     if (session.user.role === "TEACHER") {
@@ -79,11 +95,15 @@ export async function PATCH(
 
     const action = published ? "published" : "unpublished";
 
+    console.log(`[PUBLISH API] ✅ Database updated successfully`);
     console.log(
-      `Grade ${params.id} ${action} by ${session.user.role} (${session.user.email})`
+      `[PUBLISH API] Grade ${params.id} ${action} by ${session.user.role} (${session.user.email})`
     );
     console.log(
-      `Student: ${updatedGrade.student.user.name}, Subject: ${updatedGrade.subject.name}`
+      `[PUBLISH API] Student: ${updatedGrade.student.user.name}, Subject: ${updatedGrade.subject.name}`
+    );
+    console.log(
+      `[PUBLISH API] Final published status: ${updatedGrade.published}`
     );
 
     return NextResponse.json({

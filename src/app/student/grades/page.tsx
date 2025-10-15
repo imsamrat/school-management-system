@@ -11,8 +11,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Award, BookOpen } from "lucide-react";
+import { TrendingUp, Award, BookOpen, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 interface Grade {
   id: string;
@@ -63,13 +64,22 @@ export default function StudentGradesPage() {
   const fetchGradesData = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/student/grades");
+      // Add cache-busting query parameter
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/student/grades?_=${timestamp}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
 
       if (!response.ok) {
         throw new Error("Failed to fetch grades data");
       }
 
       const data = await response.json();
+      console.log("Fetched grades data:", data);
       setGradesData(data);
     } catch (error) {
       console.error("Error fetching grades data:", error);
@@ -133,11 +143,22 @@ export default function StudentGradesPage() {
   return (
     <DashboardLayout role="student">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Grades</h1>
-          <p className="text-gray-600">
-            View your academic performance and statistics
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">My Grades</h1>
+            <p className="text-gray-600">
+              View your academic performance and statistics
+            </p>
+          </div>
+          <Button
+            onClick={fetchGradesData}
+            disabled={loading}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
 
         {/* Overall Statistics */}
