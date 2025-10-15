@@ -67,6 +67,7 @@ export default function StudentAttendance() {
 
   useEffect(() => {
     if (session?.user) {
+      console.log("Triggering fetchAttendance for month:", selectedMonth);
       fetchAttendance();
     }
   }, [session, selectedMonth]);
@@ -77,6 +78,8 @@ export default function StudentAttendance() {
       // Extract month and year from selectedMonth (format: YYYY-MM)
       const [year, month] = selectedMonth.split("-");
 
+      console.log("Fetching attendance for:", { month, year, selectedMonth });
+
       const params = new URLSearchParams({
         month: month,
         year: year,
@@ -85,10 +88,13 @@ export default function StudentAttendance() {
       const response = await fetch(`/api/student/attendance?${params}`);
       const data = await response.json();
 
+      console.log("Attendance API response:", data);
+
       if (response.ok) {
-        setAttendanceRecords(data.records);
-        setStats(data.statistics);
+        setAttendanceRecords(data.records || []);
+        setStats(data.statistics || null);
       } else {
+        console.error("Attendance API error:", data);
         toast.error(data.error || "Failed to fetch attendance records");
       }
     } catch (error) {

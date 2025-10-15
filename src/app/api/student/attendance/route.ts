@@ -27,19 +27,36 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
 
+    console.log("Attendance API params:", { month, year });
+
     // Set date range
     let startDate: Date;
     let endDate: Date;
 
     if (month && year) {
-      startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-      endDate = new Date(parseInt(year), parseInt(month), 0);
+      // Start of the month at 00:00:00
+      startDate = new Date(parseInt(year), parseInt(month) - 1, 1, 0, 0, 0, 0);
+      // End of the month at 23:59:59
+      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
     } else {
       // Default to current month
       const now = new Date();
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
     }
+
+    console.log("Date range:", {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
 
     // Get attendance records
     const attendanceRecords = await db.attendance.findMany({
@@ -71,6 +88,10 @@ export async function GET(request: NextRequest) {
         date: "desc",
       },
     });
+
+    console.log(
+      `Found ${attendanceRecords.length} attendance records for student ${studentProfile.id}`
+    );
 
     // Calculate statistics
     const totalDays = attendanceRecords.length;
