@@ -19,8 +19,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Suppress hydration warnings caused by browser extensions
+              if (typeof window !== 'undefined') {
+                const originalError = console.error;
+                console.error = (...args) => {
+                  if (
+                    typeof args[0] === 'string' &&
+                    (args[0].includes('Hydration') || 
+                     args[0].includes('hydration') ||
+                     args[0].includes('did not match'))
+                  ) {
+                    return;
+                  }
+                  originalError.apply(console, args);
+                };
+              }
+            `,
+          }}
+        />
+      </head>
+      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
         <Providers>
           {children}
           <Toaster />
