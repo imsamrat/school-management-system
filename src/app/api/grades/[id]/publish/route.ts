@@ -14,8 +14,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user is admin or staff
-    if (!["ADMIN", "STAFF"].includes(session.user.role)) {
+    // Check if user is admin, staff, or teacher
+    if (!["ADMIN", "STAFF", "TEACHER"].includes(session.user.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -36,6 +36,9 @@ export async function PATCH(
           include: { user: true },
         },
         subject: true,
+        teacher: {
+          include: { user: true },
+        },
       },
     });
 
@@ -43,26 +46,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Grade not found" }, { status: 404 });
     }
 
-    // For now, we'll use a workaround since published field doesn't exist yet
-    // We'll store the published status in a special way in the remarks field
-    // This is a temporary solution until the database schema is updated
+    // If teacher, verify they own this grade
+    if (session.user.role === "TEACHER") {
+      const teacherProfile = await db.teacherProfile.findUnique({
+        where: { userId: session.user.id },
+      });
 
-    let updatedRemarks = existingGrade.remarks || "";
+      if (teacherProfile?.id !== existingGrade.teacherId) {
+        return NextResponse.json(
+          { error: "You can only publish/unpublish your own grades" },
+          { status: 403 }
+        );
+      }
+    }
 
-    // Remove existing publish markers
-    updatedRemarks = updatedRemarks
-      .replace(/\[PUBLISHED\]|\[DRAFT\]/g, "")
-      .trim();
-
-    // Add new publish marker
-    const publishMarker = published ? "[PUBLISHED]" : "[DRAFT]";
-    updatedRemarks =
-      publishMarker + (updatedRemarks ? " " + updatedRemarks : "");
-
+    // Update the published field directly in the database
     const updatedGrade = await db.grade.update({
       where: { id: params.id },
       data: {
-        remarks: updatedRemarks,
+        published: published,
       },
       include: {
         student: {
@@ -77,17 +79,28 @@ export async function PATCH(
 
     const action = published ? "published" : "unpublished";
 
+    console.log(
+      `Grade ${params.id} ${action} by ${session.user.role} (${session.user.email})`
+    );
+    console.log(
+      `Student: ${updatedGrade.student.user.name}, Subject: ${updatedGrade.subject.name}`
+    );
+
     return NextResponse.json({
-      message: `Grade ${action} successfully`,
-      grade: {
-        ...updatedGrade,
-        published: published, // Add published field to response
-      },
+      message: `Grade ${action} successfully. ${
+        published
+          ? "Students can now see this grade."
+          : "Students can no longer see this grade."
+      }`,
+      grade: updatedGrade,
     });
   } catch (error) {
     console.error("Error updating grade published status:", error);
     return NextResponse.json(
-      { error: "Failed to update grade status" },
+      {
+        error: "Failed to update grade status",
+        details: (error as Error).message,
+      },
       { status: 500 }
     );
   }

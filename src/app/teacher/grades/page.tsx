@@ -304,6 +304,12 @@ export default function TeacherGrades() {
         examDate: formData.examDate,
       };
 
+      console.log("Submitting grade with data:", submitData);
+      console.log(
+        "Available students:",
+        students.map((s) => ({ id: s.id, name: s.user?.name }))
+      );
+
       const url = editingGrade
         ? `/api/teacher/grades/${editingGrade.id}`
         : "/api/teacher/grades";
@@ -335,7 +341,7 @@ export default function TeacherGrades() {
   const handleEdit = (grade: Grade) => {
     setEditingGrade(grade);
     setFormData({
-      studentId: grade.student.user.id,
+      studentId: grade.student.id, // Use student profile ID, not user ID
       subjectId: grade.subject.id,
       examType: grade.examType,
       maxMarks: grade.maxMarks.toString(),
@@ -424,7 +430,7 @@ export default function TeacherGrades() {
           [key: string]: { obtainedMarks: string; remarks: string };
         } = {};
         (data.students || []).forEach((student: any) => {
-          const studentId = student.user?.id || student.id;
+          const studentId = student.id; // Use student profile ID
           initialGrades[studentId] = { obtainedMarks: "", remarks: "" };
         });
         setStudentGrades(initialGrades);
@@ -460,13 +466,8 @@ export default function TeacherGrades() {
       }
 
       // Prepare bulk grade data
-      const grades = validEntries.map(([userId, data]) => {
-        // Find the student profile ID from the user ID
-        const student = selectedClassStudents.find(
-          (s) => (s.user?.id || s.id) === userId
-        );
-        const studentProfileId = student?.id || student?.user?.id;
-
+      const grades = validEntries.map(([studentId, data]) => {
+        // studentId is already the student profile ID
         const obtainedMarks = parseInt(data.obtainedMarks);
         const percentage = (obtainedMarks / maxMarks) * 100;
         let grade = "F";
@@ -484,7 +485,7 @@ export default function TeacherGrades() {
         else if (percentage >= 50) grade = "D";
 
         return {
-          studentId: studentProfileId,
+          studentId: studentId,
           subjectId: bulkFormData.subjectId,
           examType: bulkFormData.examType,
           maxMarks,
@@ -628,10 +629,7 @@ export default function TeacherGrades() {
                         </SelectTrigger>
                         <SelectContent>
                           {students.map((student) => (
-                            <SelectItem
-                              key={student.user?.id || student.id}
-                              value={student.user?.id || student.id}
-                            >
+                            <SelectItem key={student.id} value={student.id}>
                               {student.rollNo || student.rollNumber} -{" "}
                               {student.user?.name ||
                                 `${student.firstName || ""} ${
@@ -1233,7 +1231,7 @@ export default function TeacherGrades() {
                     </TableHeader>
                     <TableBody>
                       {selectedClassStudents.map((student) => {
-                        const studentId = student.user?.id || student.id;
+                        const studentId = student.id; // Use student profile ID
                         return (
                           <TableRow key={studentId}>
                             <TableCell>

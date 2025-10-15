@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
         grade: grade.grade,
         remarks: grade.remarks || null,
         examDate: new Date(grade.examDate),
+        published: true, // Auto-publish grades when created by admin
       })),
     });
 

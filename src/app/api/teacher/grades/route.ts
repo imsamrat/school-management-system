@@ -208,6 +208,21 @@ export async function POST(request: NextRequest) {
 
     console.log("Teacher profile:", teacherProfile?.id);
     console.log("Calculated grade:", calculatedGrade);
+    console.log("Student ID to use:", validatedData.studentId);
+
+    // Verify student exists
+    const studentExists = await prisma.studentProfile.findUnique({
+      where: { id: validatedData.studentId },
+    });
+
+    console.log("Student exists?", !!studentExists);
+
+    if (!studentExists) {
+      return NextResponse.json(
+        { error: "Student not found", studentId: validatedData.studentId },
+        { status: 404 }
+      );
+    }
 
     // Create the grade record
     const newGrade = await prisma.grade.create({
@@ -221,6 +236,7 @@ export async function POST(request: NextRequest) {
         grade: calculatedGrade,
         remarks: validatedData.remarks,
         teacherId: teacherProfile?.id || "", // Use empty string for admin
+        published: true, // Auto-publish grades when created
       },
       include: {
         student: {

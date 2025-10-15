@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,6 +26,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("Fetching grades for student:", studentProfile.id);
+
+    // First, check total grades (published and unpublished)
+    const totalGradesCount = await db.grade.count({
+      where: { studentId: studentProfile.id },
+    });
+
+    console.log("Total grades in database:", totalGradesCount);
+
     // Get all published grades for the student
     const grades = await db.grade.findMany({
       where: {
@@ -41,6 +53,8 @@ export async function GET(request: NextRequest) {
         createdAt: "desc",
       },
     });
+
+    console.log("Published grades found:", grades.length);
 
     // Calculate statistics
     const totalGrades = grades.length;
@@ -100,7 +114,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       stats: {
         totalGrades,
         averagePercentage,
@@ -126,6 +140,13 @@ export async function GET(request: NextRequest) {
         date: grade.createdAt,
       })),
     });
+
+    // Add cache control headers to prevent caching
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+
+    return response;
   } catch (error) {
     console.error("Error fetching student grades:", error);
     return NextResponse.json(
