@@ -11,15 +11,16 @@ const updateTeacherSchema = z.object({
   password: z
     .string()
     .min(6, "Password must be at least 6 characters")
-    .optional(),
+    .optional()
+    .or(z.literal("")),
   employeeId: z.string().min(1, "Employee ID is required"),
   department: z.string().min(1, "Department is required"),
-  qualification: z.string().optional(),
-  experience: z.string().optional(),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  profileImage: z.string().optional(),
-  bio: z.string().optional(),
+  qualification: z.string().optional().or(z.literal("")),
+  experience: z.string().optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
+  profileImage: z.string().optional().or(z.literal("")),
+  bio: z.string().optional().or(z.literal("")),
 });
 
 export async function GET(
@@ -121,7 +122,7 @@ export async function PUT(
       email: validatedData.email,
     };
 
-    if (validatedData.password) {
+    if (validatedData.password && validatedData.password.length > 0) {
       updateData.password = await hash(validatedData.password, 12);
     }
 
