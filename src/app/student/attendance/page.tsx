@@ -140,7 +140,12 @@ export default function StudentAttendance() {
         currentDate.getMonth() - i,
         1
       );
-      const value = date.toISOString().slice(0, 7);
+
+      // Format as YYYY-MM using local timezone (not UTC)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const value = `${year}-${month}`;
+
       const label = date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
