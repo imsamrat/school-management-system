@@ -103,10 +103,12 @@ export async function GET(request: NextRequest) {
       },
       records: attendanceRecords.map((record) => ({
         id: record.id,
-        date: record.date,
+        date: record.date.toISOString(),
         status: record.status,
-        subject: record.subject?.name || "N/A",
-        subjectCode: record.subject?.code || "N/A",
+        subject: {
+          name: record.subject?.name || "N/A",
+          code: record.subject?.code || "N/A",
+        },
         teacher: record.teacher.user.name,
         remarks: record.remarks,
       })),

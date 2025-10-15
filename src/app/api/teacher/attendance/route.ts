@@ -250,9 +250,15 @@ export async function POST(request: NextRequest) {
         });
 
         console.log(`Teacher's classes:`, teacherClasses);
+        console.log(`Requested classId: ${classId}`);
 
         return NextResponse.json(
-          { error: "Class not found or access denied", teacherClasses },
+          {
+            error: "Class not found or access denied",
+            teacherClasses,
+            requestedClassId: classId,
+            teacherId: teacherProfile.id,
+          },
           { status: 403 }
         );
       }
@@ -280,7 +286,6 @@ export async function POST(request: NextRequest) {
             data: {
               status: record.status,
               remarks: record.remarks,
-              updatedAt: new Date(),
             },
             include: {
               student: {
@@ -372,7 +377,6 @@ export async function POST(request: NextRequest) {
           data: {
             status,
             remarks,
-            updatedAt: new Date(),
           },
           include: {
             student: {
@@ -421,8 +425,18 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("Error marking attendance:", error);
+    console.error("Error details:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      error: error,
+    });
+
     return NextResponse.json(
-      { error: "Failed to mark attendance" },
+      {
+        error: "Failed to mark attendance",
+        message: error instanceof Error ? error.message : "Unknown error",
+        details: String(error),
+      },
       { status: 500 }
     );
   }

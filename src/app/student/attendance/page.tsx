@@ -269,10 +269,9 @@ export default function StudentAttendance() {
               </CardTitle>
               <CardDescription>
                 Your attendance performance for{" "}
-                {new Date(selectedMonth).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                })}
+                {generateMonthOptions().find(
+                  (opt) => opt.value === selectedMonth
+                )?.label || selectedMonth}
               </CardDescription>
             </CardHeader>
             <CardContent>

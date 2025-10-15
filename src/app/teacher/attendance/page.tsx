@@ -135,13 +135,20 @@ export default function TeacherAttendancePage() {
   // Fetch classes
   const fetchClasses = async () => {
     try {
-      const response = await fetch("/api/teacher/classes");
+      const response = await fetch("/api/teacher/classes?limit=100");
       if (response.ok) {
         const data = await response.json();
+        console.log("Fetched classes:", data.classes);
         setClasses(data.classes || []);
+      } else {
+        console.error("Failed to fetch classes:", response.status);
+        const errorData = await response.json();
+        console.error("Error details:", errorData);
+        toast.error("Failed to load classes");
       }
     } catch (error) {
       console.error("Error fetching classes:", error);
+      toast.error("Failed to load classes");
     }
   };
 
@@ -314,28 +321,47 @@ export default function TeacherAttendancePage() {
         fetchAttendance();
       } else {
         let errorMessage = "Failed to mark attendance";
+        let responseText = "";
+
         try {
-          const responseData = await response.json();
-          console.error("Attendance API error:", responseData);
+          // First try to get the response as text
+          responseText = await response.text();
+          console.log("Raw response text:", responseText);
 
-          if (responseData.error) {
-            errorMessage = responseData.error;
-          }
+          // Try to parse as JSON
+          if (responseText) {
+            try {
+              const responseData = JSON.parse(responseText);
+              console.error("Attendance API error:", responseData);
 
-          if (responseData.details) {
-            console.error("Validation details:", responseData.details);
-            errorMessage += ": " + JSON.stringify(responseData.details);
-          }
+              if (responseData.error) {
+                errorMessage = responseData.error;
+              }
 
-          if (responseData.teacherClasses) {
-            console.log(
-              "Teacher's available classes:",
-              responseData.teacherClasses
-            );
+              if (responseData.details) {
+                console.error("Validation details:", responseData.details);
+                errorMessage += ": " + JSON.stringify(responseData.details);
+              }
+
+              if (responseData.teacherClasses) {
+                console.log(
+                  "Teacher's available classes:",
+                  responseData.teacherClasses
+                );
+              }
+            } catch (jsonError) {
+              console.error(
+                "Response is not JSON:",
+                responseText.substring(0, 200)
+              );
+              errorMessage = `Server error (Status: ${response.status}). Check console for details.`;
+            }
+          } else {
+            errorMessage = `Empty response (Status: ${response.status})`;
           }
         } catch (parseError) {
-          console.error("Failed to parse error response:", parseError);
-          errorMessage = `Server error (Status: ${response.status})`;
+          console.error("Failed to read response:", parseError);
+          errorMessage = `Network error (Status: ${response.status})`;
         }
 
         toast.error(errorMessage);
@@ -424,9 +450,28 @@ export default function TeacherAttendancePage() {
             Mark and track student attendance
           </p>
         </div>
-        <Dialog open={showMarkAttendance} onOpenChange={setShowMarkAttendance}>
+        <Dialog
+          open={showMarkAttendance}
+          onOpenChange={(open) => {
+            setShowMarkAttendance(open);
+            if (!open) {
+              // Reset dialog state when closing
+              setBulkAttendanceClass("");
+              setBulkAttendanceDate(new Date());
+              setStudents([]);
+              setBulkAttendance({});
+              setIsEditMode(false);
+            }
+          }}
+        >
           <DialogTrigger asChild>
-            <Button>
+            <Button
+              onClick={() => {
+                setIsEditMode(false);
+                setBulkAttendanceClass("");
+                setBulkAttendanceDate(new Date());
+              }}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Mark Attendance
             </Button>
@@ -455,11 +500,18 @@ export default function TeacherAttendancePage() {
                       <SelectValue placeholder="Choose class" />
                     </SelectTrigger>
                     <SelectContent>
-                      {classes.map((cls) => (
-                        <SelectItem key={cls.id} value={cls.id}>
-                          {cls.name} - {cls.section}
+                      {classes.length === 0 ? (
+                        <SelectItem value="no-classes" disabled>
+                          No classes available
                         </SelectItem>
-                      ))}
+                      ) : (
+                        classes.map((cls) => (
+                          <SelectItem key={cls.id} value={cls.id}>
+                            {cls.name} - {cls.section} (
+                            {cls._count?.students || 0} students)
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

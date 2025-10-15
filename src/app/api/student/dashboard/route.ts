@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     // Get today's schedule
     const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
     const dayOfWeek = today === 0 ? 7 : today; // Convert to 1-7 format
-    
+
     const timetables = studentProfile.classId
       ? await db.timetable.findMany({
           where: {
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
     const teacherIds = timetables
       .map((t) => t.subject.teacherId)
       .filter((id): id is string => id !== null);
-    
+
     const teachers = await db.teacherProfile.findMany({
       where: {
         id: {
@@ -153,9 +153,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const teacherMap = new Map(
-      teachers.map((t) => [t.id, t.user.name])
-    );
+    const teacherMap = new Map(teachers.map((t) => [t.id, t.user.name]));
 
     // Get announcements for student role
     const announcements = await db.announcement.findMany({
