@@ -158,26 +158,51 @@ export default function AdminClasses() {
         : "/api/classes";
       const method = editingClass ? "PUT" : "POST";
 
+      console.log("Submitting class data:", submitData);
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submitData),
       });
 
-      const data = await response.json();
+      console.log("Response status:", response.status);
+
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log("Raw response:", responseText);
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error("Failed to parse response:", parseError);
+        toast.error("Server returned invalid response");
+        return;
+      }
 
       if (response.ok) {
-        toast.success(data.message);
+        toast.success(data.message || "Class saved successfully");
         setIsDialogOpen(false);
         resetForm();
         fetchClasses();
       } else {
+        console.error("API error:", data);
+        const errorMessage =
+          data.error ||
+          data.details ||
+          `Failed to ${editingClass ? "update" : "create"} class`;
         toast.error(
-          data.error || `Failed to ${editingClass ? "update" : "create"} class`
+          typeof errorMessage === "string"
+            ? errorMessage
+            : JSON.stringify(errorMessage)
         );
       }
     } catch (error) {
-      toast.error(`Failed to ${editingClass ? "update" : "create"} class`);
+      console.error("Request error:", error);
+      toast.error(
+        `Network error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   };
 

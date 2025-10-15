@@ -217,19 +217,36 @@ export default function AdminSubjects() {
         body: JSON.stringify(submitData),
       });
 
-      const data = await response.json();
+      console.log("Response status:", response.status);
+
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log("Raw response:", responseText);
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        console.error("Failed to parse response:", parseError);
+        toast.error("Server returned invalid response");
+        return;
+      }
+
       console.log("API response:", data);
 
       if (response.ok) {
-        toast.success(data.message);
+        toast.success(data.message || "Subject saved successfully");
         setIsDialogOpen(false);
         resetForm();
         fetchSubjects();
       } else {
         console.error("API error:", data);
-        toast.error(
+        const errorMessage =
           data.error ||
-            `Failed to ${editingSubject ? "update" : "create"} subject`
+          data.details ||
+          `Failed to ${editingSubject ? "update" : "create"} subject`;
+        toast.error(
+          typeof errorMessage === "string"
+            ? errorMessage
+            : JSON.stringify(errorMessage)
         );
         if (data.details) {
           console.error("Validation details:", data.details);
@@ -237,7 +254,11 @@ export default function AdminSubjects() {
       }
     } catch (error) {
       console.error("Submit error:", error);
-      toast.error(`Failed to ${editingSubject ? "update" : "create"} subject`);
+      toast.error(
+        `Network error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   };
 
