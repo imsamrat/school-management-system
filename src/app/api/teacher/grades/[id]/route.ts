@@ -11,7 +11,10 @@ const GradeUpdateSchema = z.object({
   subjectId: z.string().min(1, "Subject is required").optional(),
   examType: z.string().min(1, "Exam type is required").optional(),
   maxMarks: z.number().min(1, "Max marks must be at least 1").optional(),
-  obtainedMarks: z.number().min(0, "Obtained marks cannot be negative").optional(),
+  obtainedMarks: z
+    .number()
+    .min(0, "Obtained marks cannot be negative")
+    .optional(),
   examDate: z.string().min(1, "Exam date is required").optional(),
   grade: z.string().optional(),
   remarks: z.string().optional(),
@@ -62,10 +65,7 @@ export async function PUT(
     });
 
     if (!existingGrade) {
-      return NextResponse.json(
-        { error: "Grade not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Grade not found" }, { status: 404 });
     }
 
     // For teachers, verify ownership
@@ -91,22 +91,27 @@ export async function PUT(
     } else if (validatedData.maxMarks || validatedData.obtainedMarks) {
       // If only one is updated, recalculate with the existing value
       const maxMarks = validatedData.maxMarks || existingGrade.maxMarks;
-      const obtainedMarks = validatedData.obtainedMarks || existingGrade.obtainedMarks;
+      const obtainedMarks =
+        validatedData.obtainedMarks || existingGrade.obtainedMarks;
       const percentage = (obtainedMarks / maxMarks) * 100;
       updatedGrade = updatedGrade || calculateGrade(percentage);
     }
 
     // Update the grade record
     const updateData: any = {};
-    
+
     if (validatedData.studentId) updateData.studentId = validatedData.studentId;
     if (validatedData.subjectId) updateData.subjectId = validatedData.subjectId;
     if (validatedData.examType) updateData.examType = validatedData.examType;
-    if (validatedData.maxMarks !== undefined) updateData.maxMarks = validatedData.maxMarks;
-    if (validatedData.obtainedMarks !== undefined) updateData.obtainedMarks = validatedData.obtainedMarks;
-    if (validatedData.examDate) updateData.examDate = new Date(validatedData.examDate);
+    if (validatedData.maxMarks !== undefined)
+      updateData.maxMarks = validatedData.maxMarks;
+    if (validatedData.obtainedMarks !== undefined)
+      updateData.obtainedMarks = validatedData.obtainedMarks;
+    if (validatedData.examDate)
+      updateData.examDate = new Date(validatedData.examDate);
     if (updatedGrade) updateData.grade = updatedGrade;
-    if (validatedData.remarks !== undefined) updateData.remarks = validatedData.remarks;
+    if (validatedData.remarks !== undefined)
+      updateData.remarks = validatedData.remarks;
 
     const updated = await prisma.grade.update({
       where: { id: params.id },
@@ -167,9 +172,9 @@ export async function PUT(
       stack: (error as Error).stack,
     });
     return NextResponse.json(
-      { 
+      {
         error: "Failed to update grade",
-        details: (error as Error).message 
+        details: (error as Error).message,
       },
       { status: 500 }
     );
@@ -204,10 +209,7 @@ export async function DELETE(
     });
 
     if (!existingGrade) {
-      return NextResponse.json(
-        { error: "Grade not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Grade not found" }, { status: 404 });
     }
 
     // For teachers, verify ownership
@@ -239,9 +241,9 @@ export async function DELETE(
       stack: (error as Error).stack,
     });
     return NextResponse.json(
-      { 
+      {
         error: "Failed to delete grade",
-        details: (error as Error).message 
+        details: (error as Error).message,
       },
       { status: 500 }
     );
