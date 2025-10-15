@@ -136,8 +136,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("Error creating class:", error);
+    console.error("Error details:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+        details: String(error),
+      },
       { status: 500 }
     );
   }
