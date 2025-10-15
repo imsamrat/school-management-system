@@ -38,19 +38,11 @@ interface AttendanceRecord {
   date: string;
   status: string;
   remarks?: string;
-  class: {
-    name: string;
-    section: string;
-  };
-  subject?: {
+  subject: {
     name: string;
     code: string;
   };
-  teacher: {
-    user: {
-      name: string;
-    };
-  };
+  teacher: string;
 }
 
 interface AttendanceStats {
@@ -74,60 +66,37 @@ export default function StudentAttendance() {
   );
 
   useEffect(() => {
-    if (session?.user?.profile) {
+    if (session?.user) {
       fetchAttendance();
     }
   }, [session, selectedMonth]);
 
   const fetchAttendance = async () => {
-    if (!session?.user?.profile) return;
-
     setLoading(true);
     try {
+      // Extract month and year from selectedMonth (format: YYYY-MM)
+      const [year, month] = selectedMonth.split("-");
+
       const params = new URLSearchParams({
-        studentId: session.user.profile.id,
+        month: month,
+        year: year,
       });
 
-      const response = await fetch(`/api/attendance?${params}`);
+      const response = await fetch(`/api/student/attendance?${params}`);
       const data = await response.json();
 
       if (response.ok) {
-        // Filter by selected month
-        const filteredRecords = data.attendances.filter(
-          (record: AttendanceRecord) => {
-            const recordMonth = record.date.slice(0, 7);
-            return recordMonth === selectedMonth;
-          }
-        );
-
-        setAttendanceRecords(filteredRecords);
-        calculateStats(filteredRecords);
+        setAttendanceRecords(data.records);
+        setStats(data.statistics);
       } else {
-        toast.error("Failed to fetch attendance records");
+        toast.error(data.error || "Failed to fetch attendance records");
       }
     } catch (error) {
+      console.error("Error fetching attendance:", error);
       toast.error("Failed to fetch attendance records");
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateStats = (records: AttendanceRecord[]) => {
-    const totalDays = records.length;
-    const presentDays = records.filter((r) => r.status === "PRESENT").length;
-    const absentDays = records.filter((r) => r.status === "ABSENT").length;
-    const lateDays = records.filter((r) => r.status === "LATE").length;
-    const excusedDays = records.filter((r) => r.status === "EXCUSED").length;
-    const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
-
-    setStats({
-      totalDays,
-      presentDays,
-      absentDays,
-      lateDays,
-      excusedDays,
-      attendanceRate,
-    });
   };
 
   const getStatusColor = (status: string) => {
@@ -189,30 +158,43 @@ export default function StudentAttendance() {
         </div>
 
         {/* Month Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Calendar className="h-5 w-5 mr-2" />
-              Select Month
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="w-64">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {generateMonthOptions().map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-blue-600 rounded-lg">
+              <Calendar className="h-6 w-6 text-white" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Select Period
+              </h3>
+              <p className="text-sm text-gray-600">
+                View attendance for a specific month
+              </p>
+            </div>
+          </div>
+          <div className="w-72">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-full h-12 text-base font-medium bg-white border-2 border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                <SelectValue placeholder="Select month">
+                  {generateMonthOptions().find(
+                    (opt) => opt.value === selectedMonth
+                  )?.label || "Select month"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="w-72 max-h-80">
+                {generateMonthOptions().map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="text-base py-3 cursor-pointer hover:bg-blue-50"
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {/* Attendance Statistics */}
         {stats && (
@@ -361,7 +343,6 @@ export default function StudentAttendance() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Class</TableHead>
                     <TableHead>Subject</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Teacher</TableHead>
@@ -373,12 +354,7 @@ export default function StudentAttendance() {
                     <TableRow key={record.id}>
                       <TableCell>{formatDate(record.date)}</TableCell>
                       <TableCell>
-                        {record.class.name} - {record.class.section}
-                      </TableCell>
-                      <TableCell>
-                        {record.subject
-                          ? `${record.subject.name} (${record.subject.code})`
-                          : "General"}
+                        {record.subject.name} ({record.subject.code})
                       </TableCell>
                       <TableCell>
                         <span
@@ -390,7 +366,7 @@ export default function StudentAttendance() {
                             record.status.slice(1).toLowerCase()}
                         </span>
                       </TableCell>
-                      <TableCell>{record.teacher.user.name}</TableCell>
+                      <TableCell>{record.teacher}</TableCell>
                       <TableCell>{record.remarks || "-"}</TableCell>
                     </TableRow>
                   ))}
