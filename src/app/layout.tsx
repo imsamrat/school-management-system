@@ -25,25 +25,39 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               // Suppress hydration warnings caused by browser extensions
-              if (typeof window !== 'undefined') {
+              (function() {
                 const originalError = console.error;
-                console.error = (...args) => {
-                  if (
-                    typeof args[0] === 'string' &&
-                    (args[0].includes('Hydration') || 
-                     args[0].includes('hydration') ||
-                     args[0].includes('did not match'))
-                  ) {
-                    return;
-                  }
+                const originalWarn = console.warn;
+                
+                const shouldSuppress = (message) => {
+                  if (typeof message !== 'string') return false;
+                  return message.includes('Hydration') || 
+                         message.includes('hydration') ||
+                         message.includes('did not match') ||
+                         message.includes('tree hydrated') ||
+                         message.includes('server rendered HTML') ||
+                         message.includes('bis_skin_checked') ||
+                         message.includes('react.dev/link/hydration-mismatch');
+                };
+                
+                console.error = function(...args) {
+                  if (shouldSuppress(args[0])) return;
                   originalError.apply(console, args);
                 };
-              }
+                
+                console.warn = function(...args) {
+                  if (shouldSuppress(args[0])) return;
+                  originalWarn.apply(console, args);
+                };
+              })();
             `,
           }}
         />
       </head>
-      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+      <body
+        className={`${inter.className} antialiased`}
+        suppressHydrationWarning
+      >
         <Providers>
           {children}
           <Toaster />
