@@ -13,6 +13,7 @@ const GradeSchema = z.object({
   maxMarks: z.number().min(1, "Max marks must be at least 1"),
   obtainedMarks: z.number().min(0, "Obtained marks cannot be negative"),
   examDate: z.string().min(1, "Exam date is required"),
+  grade: z.string().optional(), // Allow grade to be passed optionally
   remarks: z.string().optional(),
 });
 
@@ -184,7 +185,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log("Received grade data:", body);
     const validatedData = GradeSchema.parse(body);
+    console.log("Validated grade data:", validatedData);
 
     // Get teacher profile
     const teacherProfile = await prisma.teacherProfile.findUnique({
@@ -201,15 +204,23 @@ export async function POST(request: NextRequest) {
     // Calculate percentage and grade
     const percentage =
       (validatedData.obtainedMarks / validatedData.maxMarks) * 100;
-    const grade = calculateGrade(percentage);
+    const calculatedGrade = validatedData.grade || calculateGrade(percentage);
+
+    console.log("Teacher profile:", teacherProfile?.id);
+    console.log("Calculated grade:", calculatedGrade);
 
     // Create the grade record
     const newGrade = await prisma.grade.create({
       data: {
-        ...validatedData,
-        teacherId: teacherProfile?.id || "", // Use empty string for admin
-        grade,
+        studentId: validatedData.studentId,
+        subjectId: validatedData.subjectId,
+        examType: validatedData.examType,
+        maxMarks: validatedData.maxMarks,
+        obtainedMarks: validatedData.obtainedMarks,
         examDate: new Date(validatedData.examDate),
+        grade: calculatedGrade,
+        remarks: validatedData.remarks,
+        teacherId: teacherProfile?.id || "", // Use empty string for admin
       },
       include: {
         student: {
@@ -254,6 +265,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error("Validation error:", error.issues);
       return NextResponse.json(
         { error: "Validation failed", details: error.issues },
         { status: 400 }
@@ -261,8 +273,15 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("Error creating grade:", error);
+    console.error("Error details:", {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
     return NextResponse.json(
-      { error: "Failed to create grade" },
+      {
+        error: "Failed to create grade",
+        details: (error as Error).message,
+      },
       { status: 500 }
     );
   }
